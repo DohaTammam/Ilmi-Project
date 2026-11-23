@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ilmi.Modules.Family.Domain\Ilmi.Modules.Family.Domain.csproj" />
+    <ProjectReference Include="..\Ilmi.Modules.Family.Contracts\Ilmi.Modules.Family.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Ilmi.SharedKernel\Ilmi.SharedKernel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FluentValidation" Version="12.2.0" />
+  </ItemGroup>
+
+</Project>
+

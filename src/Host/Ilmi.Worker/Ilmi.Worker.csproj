@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Modules\Identity\Ilmi.Modules.Identity.Application\Ilmi.Modules.Identity.Application.csproj" />
+    <ProjectReference Include="..\..\Modules\Users\Ilmi.Modules.Users.Application\Ilmi.Modules.Users.Application.csproj" />
+    <ProjectReference Include="..\..\Modules\Family\Ilmi.Modules.Family.Application\Ilmi.Modules.Family.Application.csproj" />
+    <ProjectReference Include="..\..\Modules\Notifications\Ilmi.Modules.Notifications.Application\Ilmi.Modules.Notifications.Application.csproj" />
+    <ProjectReference Include="..\..\Modules\Cms\Ilmi.Modules.Cms.Application\Ilmi.Modules.Cms.Application.csproj" />
+    <ProjectReference Include="..\..\Modules\Support\Ilmi.Modules.Support.Application\Ilmi.Modules.Support.Application.csproj" />
+    <ProjectReference Include="..\..\Modules\Settings\Ilmi.Modules.Settings.Application\Ilmi.Modules.Settings.Application.csproj" />
+    <ProjectReference Include="..\..\Modules\Identity\Ilmi.Modules.Identity.Infrastructure\Ilmi.Modules.Identity.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Modules\Users\Ilmi.Modules.Users.Infrastructure\Ilmi.Modules.Users.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Modules\Family\Ilmi.Modules.Family.Infrastructure\Ilmi.Modules.Family.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Modules\Notifications\Ilmi.Modules.Notifications.Infrastructure\Ilmi.Modules.Notifications.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Modules\Cms\Ilmi.Modules.Cms.Infrastructure\Ilmi.Modules.Cms.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Modules\Support\Ilmi.Modules.Support.Infrastructure\Ilmi.Modules.Support.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Modules\Settings\Ilmi.Modules.Settings.Infrastructure\Ilmi.Modules.Settings.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.15" />
+  </ItemGroup>
+
+</Project>
+
