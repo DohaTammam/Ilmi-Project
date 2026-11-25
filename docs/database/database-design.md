@@ -177,7 +177,7 @@ is now outside Ilmi's database (Section 8), so the `checkpoint` column once prop
 | user_accessibility_needs.user_id → external_user_profiles.user_id | 1 : N | CASCADE |
 | user_accessibility_needs.disability_type_id → disability_types.id | N : 1 | RESTRICT |
 | user_settings.user_id → users.id | 1 : 0..1 | RESTRICT |
-| user_rule_assignments.user_id → users.id; .rule_id → rules.id | 1 : N today 1 : 0..1 (UQ) | RESTRICT |
+| user_rule_assignments.user_id → users.id; .rule_id → rules.id | 1 : 0..1 today (UQ on user_id); becomes 1 : N if Q17 allows several Rules | RESTRICT |
 | user_rule_history.user_id → users.id; from/to rule → rules.id | 1 : N | RESTRICT |
 | user_credentials / external_logins / user_sessions / quick_login_registrations .user_id → users.id | 1 : 0..1, 1 : 0..2, 1 : N, 1 : N | RESTRICT |
 | otp_challenges.user_id, initiated_by_user_id; login_audit.user_id → users.id | 0..1 : N | RESTRICT |

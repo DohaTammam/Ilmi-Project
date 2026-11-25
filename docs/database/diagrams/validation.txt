@@ -1,0 +1,28 @@
+[PASS] 34 tables in the inventory  (34)
+[PASS] six modules  (Users & Identity=16, Family=1, Notifications=3, Platform=2, Support=3, CMS=9)
+[PASS] module table counts 16/1/3/2/3/9
+[PASS] every ERD entity is in the inventory  (extra=[] missing=[])
+[PASS] every table appears in a detailed diagram  (missing=[])
+[PASS] every table appears in the overview
+[PASS] excluded tables absent
+[PASS] no accessibility_mode_id anywhere
+[PASS] user_settings has no accessibility mode column
+[PASS] users has no rule_id (replaced by user_rule_assignments)
+[PASS] users has is_active (IsActive) and updated_at (UpdatedOn) and user_kind
+[PASS] users keeps account_status
+[PASS] disability_types is a lookup with 4 seed rows
+[PASS] user_accessibility_needs is a composite-PK junction
+[PASS] notifications -> notification_deliveries is 1:N physical
+[PASS] users -> user_settings 1:0..1
+[PASS] users -> external_user_profiles 1:0..1
+[PASS] users -> user_credentials 1:0..1 (social-only users have none)
+[PASS] users -> user_rule_assignments 1:0..1 (UQ user_id)
+[PASS] user_credentials.password_hash is NOT NULL
+[PASS] user_sessions.expires_at is nullable (until explicit logout)
+[PASS] pending_payload is varbinary(max)
+[PASS] no passcode columns in quick_login_registrations
+[PASS] every cross-module relationship is logical (dashed)  (9 relationships)
+[PASS] no physical FK crosses a module boundary
+[PASS] no logical line inside one module (those are physical FKs)
+[PASS] no internal_user_profiles / employee attributes
+[PASS] one PK on every table

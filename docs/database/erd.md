@@ -109,7 +109,7 @@ erDiagram
 
 ```mermaid
 erDiagram
-  users ||--o{ user_rule_assignments : "physical FK; one current Rule today (UQ user_id)"
+  users ||--o| user_rule_assignments : "physical FK; UQ(user_id) = one current Rule today (Q17)"
   rules ||--o{ user_rule_assignments : "physical FK"
   users ||--o{ user_rule_history : "physical FK"
   rules |o--o{ user_rule_history : "physical FK from_rule_id"
@@ -293,7 +293,7 @@ Schema `notifications`. **One notification has many deliveries (1:N).** A delive
 
 ```mermaid
 erDiagram
-  notifications ||--o{ notification_deliveries : "physical FK, 1 : N (SET NULL)"
+  notifications |o--o{ notification_deliveries : "physical FK, 1 : N (SET NULL)"
   UsersIdentity_users ||..o{ notifications : "logical: user_id"
   UsersIdentity_users |o..o{ notification_deliveries : "logical: user_id"
   UsersIdentity_users ||..o{ push_device_tokens : "logical: user_id"
@@ -433,7 +433,7 @@ Schema `cms`. Local cache (read model) of the external CMS. Hierarchy and catego
 
 ```mermaid
 erDiagram
-  exhibition_nodes ||--o{ exhibition_nodes : "physical FK parent_id"
+  exhibition_nodes |o--o{ exhibition_nodes : "physical FK parent_id"
   exhibition_nodes ||--o{ exhibition_node_translations : "physical FK, cascade"
   exhibition_nodes |o--o{ exhibitions : "physical FK"
   exhibitions ||--o{ exhibition_translations : "physical FK, cascade"

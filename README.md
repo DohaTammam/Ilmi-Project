@@ -16,7 +16,8 @@ Backend for the **ilmi Web & Mobile Application** (Phase 1) on **ASP.NET Core / 
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | module diagram, dependency rules, project/folder structure, DbContext ownership |
 | [docs/database/database-design.md](docs/database/database-design.md) | module-to-schema mapping, table inventory, constraints, relationships, changes, assumptions, open decisions |
-| [docs/database/erd.md](docs/database/erd.md) | one ERD per area with all entities and attributes (physical vs logical references) |
+| [docs/database/erd.md](docs/database/erd.md) | Mermaid ERD source per area (all entities and attributes) |
+| [docs/database/diagrams/](docs/database/diagrams/README.md) | generated ERD files: PDF, SVG, PNG and editable draw.io |
 | [docs/srs-open-questions.md](docs/srs-open-questions.md) | requirement conflicts and gaps |
 
 ## Modules and schemas
