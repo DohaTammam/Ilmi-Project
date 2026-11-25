@@ -60,6 +60,22 @@ public class ModuleArchitectureTests
     }
 
     [Fact]
+    public void Modules_AreExactlyTheSixApprovedOnes() =>
+        Assert.Equal(
+            new[] { "Cms", "Family", "Notifications", "Platform", "Support", "UsersIdentity" },
+            Directory.GetDirectories(Path.Combine(Root, "src", "Modules")).Select(Path.GetFileName).OrderBy(n => n).ToArray());
+
+    [Theory]
+    [InlineData("Users")]
+    [InlineData("Identity")]
+    [InlineData("Settings")]
+    public void RetiredModules_NoLongerExist(string retired)
+    {
+        foreach (var layer in Layers)
+            Assert.False(ProjectExists(ProjectName(retired, layer)), $"Retired module project still exists: {ProjectName(retired, layer)}");
+    }
+
+    [Fact]
     public void SharedKernel_ReferencesNothing() =>
         Assert.Empty(ReferencesOf(SharedKernel));
 

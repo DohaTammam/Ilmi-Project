@@ -7,20 +7,18 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Modules\Identity\Ilmi.Modules.Identity.Presentation\Ilmi.Modules.Identity.Presentation.csproj" />
-    <ProjectReference Include="..\..\Modules\Users\Ilmi.Modules.Users.Presentation\Ilmi.Modules.Users.Presentation.csproj" />
+    <ProjectReference Include="..\..\Modules\UsersIdentity\Ilmi.Modules.UsersIdentity.Presentation\Ilmi.Modules.UsersIdentity.Presentation.csproj" />
     <ProjectReference Include="..\..\Modules\Family\Ilmi.Modules.Family.Presentation\Ilmi.Modules.Family.Presentation.csproj" />
     <ProjectReference Include="..\..\Modules\Notifications\Ilmi.Modules.Notifications.Presentation\Ilmi.Modules.Notifications.Presentation.csproj" />
     <ProjectReference Include="..\..\Modules\Cms\Ilmi.Modules.Cms.Presentation\Ilmi.Modules.Cms.Presentation.csproj" />
     <ProjectReference Include="..\..\Modules\Support\Ilmi.Modules.Support.Presentation\Ilmi.Modules.Support.Presentation.csproj" />
-    <ProjectReference Include="..\..\Modules\Settings\Ilmi.Modules.Settings.Presentation\Ilmi.Modules.Settings.Presentation.csproj" />
-    <ProjectReference Include="..\..\Modules\Identity\Ilmi.Modules.Identity.Infrastructure\Ilmi.Modules.Identity.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\Modules\Users\Ilmi.Modules.Users.Infrastructure\Ilmi.Modules.Users.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Modules\Platform\Ilmi.Modules.Platform.Presentation\Ilmi.Modules.Platform.Presentation.csproj" />
+    <ProjectReference Include="..\..\Modules\UsersIdentity\Ilmi.Modules.UsersIdentity.Infrastructure\Ilmi.Modules.UsersIdentity.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\Family\Ilmi.Modules.Family.Infrastructure\Ilmi.Modules.Family.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\Notifications\Ilmi.Modules.Notifications.Infrastructure\Ilmi.Modules.Notifications.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\Cms\Ilmi.Modules.Cms.Infrastructure\Ilmi.Modules.Cms.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\Support\Ilmi.Modules.Support.Infrastructure\Ilmi.Modules.Support.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\Modules\Settings\Ilmi.Modules.Settings.Infrastructure\Ilmi.Modules.Settings.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\Modules\Platform\Ilmi.Modules.Platform.Infrastructure\Ilmi.Modules.Platform.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

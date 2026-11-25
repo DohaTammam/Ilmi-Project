@@ -2,12 +2,35 @@
 
 Backend for the **ilmi Web & Mobile Application** (Phase 1) on **ASP.NET Core / .NET 10**.
 
-- **Architectural style:** Modular Monolith: one deployable API (plus one worker), split into independent business modules.
+- **Architectural style:** Modular Monolith: one deployable API (plus one worker), split into six independent business modules.
 - **Architectural pattern:** Clean Architecture *inside each module*.
 - Source of requirements: *ilmi Web & Application Phase 1 SRS v3.1*. Open requirement conflicts: [docs/srs-open-questions.md](docs/srs-open-questions.md).
 
-> **Status: architecture and skeleton only.** There is no business logic, no endpoints, no database code. The only code is
-> two empty host entry points and the architecture tests that guard the structure.
+> **Status: architecture, skeleton and database design only.** There is no business logic, no endpoints and no database code.
+> The only code is two empty host entry points and the architecture tests that guard the structure.
+> Nothing in the database design may be implemented before it is approved.
+
+## Documents
+
+| Document | Content |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | module diagram, dependency rules, project/folder structure, DbContext ownership |
+| [docs/database/database-design.md](docs/database/database-design.md) | module-to-schema mapping, table inventory, constraints, relationships, changes, assumptions, open decisions |
+| [docs/database/erd.md](docs/database/erd.md) | one ERD per area with all entities and attributes (physical vs logical references) |
+| [docs/srs-open-questions.md](docs/srs-open-questions.md) | requirement conflicts and gaps |
+
+## Modules and schemas
+
+| Module | Schema | Owns |
+|---|---|---|
+| **Users & Identity** (`UsersIdentity`) | `users` | External and Internal accounts, profiles, Rules, special needs, user settings, registration, login, OTP, sessions, Google/Apple, Quick Login (UC002-UC008) |
+| **Family** | `family` | add dependent, QR link/unlink, family view and rules (UC013-UC017) |
+| **Notifications** | `notifications` | notification centre; email, SMS, push delivery (UC020) |
+| **Platform** | `platform` | system settings, country calling codes (formerly Settings) |
+| **Support** | `support` | Contact Us, tickets, attachments (UC019) |
+| **Cms** | `cms` | local cache of the external CMS, onboarding completions (UC009-UC012, UC018) |
+
+Accessibility *modes* are managed by the Frontend only (no table). Job executions live in a separate external database (not in Ilmi's model).
 
 ## Structure
 
@@ -18,37 +41,22 @@ src/
     Ilmi.Api/                             ASP.NET Core host: wires up every module's Presentation + Infrastructure
     Ilmi.Worker/                          background-job host
   BuildingBlocks/
-    Ilmi.SharedKernel/                    tiny set of types shared by all modules (base entity, result type, ...)
+    Ilmi.SharedKernel/                    tiny set of types shared by all modules
   Modules/
-    Identity/  Users/  Family/  Notifications/  Cms/  Support/  Settings/
+    UsersIdentity/  Family/  Notifications/  Platform/  Support/  Cms/
       Ilmi.Modules.<Module>.Contracts/        public surface other modules may use (DTOs, service interfaces)
       Ilmi.Modules.<Module>.Domain/           Entities, ValueObjects, Enums, Events, Exceptions
       Ilmi.Modules.<Module>.Application/      Commands, Queries, Abstractions (ports), Dtos, EventHandlers
-      Ilmi.Modules.<Module>.Infrastructure/   Persistence (Configurations, Repositories, Migrations), ExternalServices
+      Ilmi.Modules.<Module>.Infrastructure/   Persistence (DbContext, Configurations, Migrations, Repositories), ExternalServices
       Ilmi.Modules.<Module>.Presentation/     Controllers, Requests, Responses
-      README.md                               what the module owns (mapped to SRS use cases)
+      README.md                               what the module owns
 tests/
-  Ilmi.ArchitectureTests/                 enforces the dependency rules below (51 tests)
-  Ilmi.IntegrationTests/                  host smoke test; module endpoint tests will be added per module
+  Ilmi.ArchitectureTests/                 enforces the dependency rules and the approved module list
+  Ilmi.IntegrationTests/                  host smoke test
 docs/
-  srs-open-questions.md
 ```
 
 Empty folders contain a `.gitkeep` so the structure is versioned. Remove it when you add the first real file.
-
-## Modules (from the SRS)
-
-| Module | Owns | SRS |
-|---|---|---|
-| **Identity** | registration, login, OTP, passwords, Google/Apple sign-in, Quick Login boundary | UC002-UC006, UC008 |
-| **Users** | profiles, account types (Child/Teen/Adult, Parent flag), status, QR identity | UC007 |
-| **Family** | add dependent, QR link/unlink, family view and rules | UC013-UC017 |
-| **Notifications** | notification centre; email, SMS, push delivery | UC020, section 4 |
-| **Cms** | exhibitions, galleries, gardens, home, About ilmi, ilmi Updates, CMS integration boundary | UC009-UC011, UC018 |
-| **Support** | Contact Us, tickets, attachments | UC019 |
-| **Settings** | language, accessibility, configurable values | UC001 |
-
-Onboarding (UC012) is mostly CMS-driven content and is expected to live in **Cms**; confirm when that module is designed.
 
 ## Dependency rules
 
@@ -70,30 +78,24 @@ Infrastructure ─► Application      Application ──► own Contracts
 
 Between modules:
 
-1. A module may use another module **only through that module's `Contracts` project**. Never its Domain, Application or Infrastructure.
-2. A module owns its data: its own database **schema** (e.g. `users`), no reading another module's tables, no cross-schema foreign keys.
-3. Controllers (Presentation) contain no business logic; they translate HTTP to Application use cases.
-4. Prefer synchronous calls through Contracts interfaces; use domain/integration events (in-process) where one module must react to another.
+1. A module may use another module **only through that module's `Contracts` project**.
+2. A module owns its data: its own **schema** and its own DbContext. No reading another module's tables, no cross-schema foreign keys, no cross-module navigation properties.
+   Cross-module references are plain ids validated through Contracts. Physical foreign keys exist only inside one module.
+3. Controllers (Presentation) contain no business logic.
+4. Prefer synchronous calls through Contracts interfaces; use in-process events where one module must react to another.
 
-`tests/Ilmi.ArchitectureTests` reads every `.csproj` and **fails the build** when any rule is broken (verified by temporarily adding a
-forbidden reference: 2 tests failed, then passed after reverting).
-
-### Why this shape
-- **Contracts as a separate project per module** is the only way to make "talk through the public surface" compiler-enforced rather than a convention.
-- **One shared database, one schema per module:** simple to run and deploy now; a module can be moved to its own database later because it owns its tables.
-- **Two hosts:** the API stays stateless and horizontally scalable; scheduled work (SRS GSR019/GSR020, 24-hourly, configurable) runs in the Worker.
-- 40 projects is more ceremony than a small app needs; it is the price of enforced boundaries. If it proves heavy, Contracts and Presentation can be merged per module without changing the rules.
+`tests/Ilmi.ArchitectureTests` reads every `.csproj` and fails the build when a rule is broken or when a retired module project reappears.
 
 ## Technology (chosen, not yet used in code)
 
-| Concern | Choice | Where it is referenced |
-|---|---|---|
-| Web API | ASP.NET Core 10 | Host/Ilmi.Api, Presentation projects |
-| Persistence | EF Core 10 + SQL Server | each module's Infrastructure |
-| Validation | FluentValidation 12 | each module's Application |
-| API docs | Swashbuckle (Swagger/OpenAPI) | Host/Ilmi.Api |
-| Background jobs | .NET Generic Host `BackgroundService` | Host/Ilmi.Worker |
-| Tests | xUnit, Microsoft.AspNetCore.Mvc.Testing | tests/ |
+| Concern | Choice |
+|---|---|
+| Web API | ASP.NET Core 10 |
+| Persistence | EF Core 10 + SQL Server, one DbContext per module |
+| Validation | FluentValidation 12 |
+| API docs | Swashbuckle (Swagger/OpenAPI) |
+| Background jobs | .NET Generic Host `BackgroundService` |
+| Tests | xUnit, Microsoft.AspNetCore.Mvc.Testing |
 
 All packages are pinned to the .NET 10 line (the newest "latest" NuGet packages target .NET 11).
 
@@ -104,18 +106,11 @@ dotnet build Ilmi.sln
 dotnet test Ilmi.sln
 ```
 
-Nothing else is required to run yet: there is no database, no configuration and no secrets. Planned configuration approach for later:
-connection strings and signing keys come from user-secrets / environment variables, never from committed files.
+Nothing else is required to run yet: no database, no configuration, no secrets.
 
-## Adding functionality (when you are ready)
+## Next steps
 
-1. Pick a module; read its README and the SRS use cases it owns.
-2. Start in Domain, then Application (use case + ports), then Infrastructure (adapter), then Presentation (controller).
-3. Register the module in the host (one `Add<Module>Module()` per module, to be added in each module's Presentation/Infrastructure).
-4. If another module needs something, add it to this module's **Contracts**, not by adding a reference.
-5. Run `dotnet test`; the architecture tests will tell you if a boundary was crossed.
-
-## Suggested order
-Resolve the open SRS questions first (3, 5 and 7 are still open), then **Settings/Users foundations → Identity → Notifications → Family → Cms → Support**.
-Cross-cutting items to design before the first endpoint: response envelope and error handling, authentication/JWT, per-module DbContext and
-migrations, the scheduled-job approach, logging with PII masking, and load testing for the SRS performance targets (NFR001-NFR003).
+1. Approve the decisions listed in [docs/database/database-design.md](docs/database/database-design.md) section 10 and answer the open questions.
+2. Then implement module by module: **Platform → Users & Identity → Notifications → Family → Cms → Support**, domain first, then application, infrastructure, presentation.
+3. Cross-cutting items to design before the first endpoint: response envelope and error handling, authentication/JWT, the scheduled-job approach, logging with PII masking,
+   and load testing for the SRS performance targets (NFR001-NFR003).

@@ -1,4 +1,4 @@
-using System.Xml.Linq;
+﻿using System.Xml.Linq;
 
 namespace Ilmi.ArchitectureTests;
 
@@ -6,7 +6,7 @@ namespace Ilmi.ArchitectureTests;
 internal static class SolutionStructure
 {
     public static readonly string[] Modules =
-        ["Identity", "Users", "Family", "Notifications", "Cms", "Support", "Settings"];
+        ["UsersIdentity", "Family", "Notifications", "Platform", "Support", "Cms"];
 
     public static readonly string[] Layers = ["Contracts", "Domain", "Application", "Infrastructure", "Presentation"];
 
