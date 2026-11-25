@@ -34,41 +34,45 @@ INK = "#1f2937"
 LINE = "#334155"
 STUB_COLOR = "#64748b"
 
-STUB_MODULE = {"UsersIdentity_users": ("users", "UsersIdentity"), "Family_family_links": ("family_links", "Family")}
+STUB_MODULE = {"UsersIdentity_users": ("AspNetUsers", "UsersIdentity"), "Family_family_links": ("family_links", "Family")}
 LOOKUPS = {"avatars", "disability_types", "rules", "ticket_types", "country_calling_codes"}
 JUNCTIONS = {"user_accessibility_needs"}
 EXTRA_UQ = {  # columns that take part in composite / filtered unique constraints (single-column UK comes from the ERD)
-    "external_user_profiles": {"mobile_country_code", "mobile_national_number"},
-    "user_rule_assignments": {"user_id"},
-    "external_logins": {"user_id", "provider", "provider_subject"},
+    "AspNetUsers": {"MobileCountryCode", "MobileNationalNumber", "MobileUniquenessKey"},
+    "AspNetUserLogins": {"UserId"},
     "quick_login_registrations": {"device_id"},
     "family_links": {"guardian_user_id", "dependent_user_id"},
     "push_device_tokens": {"user_id", "device_id"},
     "ticket_attachments": {"ticket_id", "attachment_no", "sha256"},
 }
 CONSTRAINTS = {  # transcribed from database-design.md section 3 (unique constraints and key CHECKs)
-    "users": ["UQ (id, user_kind)  - target of the profile composite FK",
-              "CHECK user_kind IN (External, Internal)",
-              "CHECK account_status IN (Active, PendingActivation, Deactivated)",
-              "CHECK PendingActivation => activation_expires_at NOT NULL",
-              "updated_at is the UpdatedOn property; is_active is IsActive"],
-    "external_user_profiles": ["Composite FK (user_id, user_kind) -> users (id, user_kind); user_kind = 'External'",
-                               "UQ (mobile_country_code, mobile_national_number) WHERE user_type IN (Teen, Adult)",
-                               "CHECK user_type IN (Child, Teen, Adult)", "CHECK gender IN (Male, Female) or NULL"],
+    "AspNetUsers": ["ASP.NET Core Identity users table (main users table); shared by the Identity user and the Domain user",
+                    "UQ (NormalizedEmail): the login identifier; UQ (NormalizedUserName): Identity UserNameIndex",
+                    "UQ (MobileCountryCode, MobileNationalNumber, MobileUniquenessKey) WHERE mobile is set: unique across Internal and External users; a Child's key is its own Id, so Children may share a number",
+                    "UQ (Id, UserKind): target of the composite FKs from the two profile tables",
+                    "CHECK UserKind IN (External, Internal); AccountStatus IN (Active, PendingActivation, Deactivated)",
+                    "CHECK External => UserType and mobile NOT NULL; Internal => UserType NULL",
+                    "CHECK PendingActivation => PendingActivationExpiresAt NOT NULL",
+                    "PasswordHash is NULL for social-only users; lockout uses LockoutEnd / AccessFailedCount"],
+    "external_users": ["Composite FK (user_id, user_kind) -> AspNetUsers (Id, UserKind); user_kind = 'External'",
+                       "UQ (qr_code), CHECK 10 characters 0-9 A-Z", "CHECK gender IN (Male, Female) or NULL"],
+    "internal_users": ["Composite FK (user_id, user_kind) -> AspNetUsers (Id, UserKind); user_kind = 'Internal'",
+                       "No employee attributes: none are defined by the requirements"],
+    "AspNetRoles": ["Security roles. Not the business Rules; none defined yet"],
+    "AspNetUserLogins": ["Google / Apple logins. PK (LoginProvider, ProviderKey); UQ (UserId, LoginProvider)"],
     "rules": ["Seed: Child, Teen, Adult, Parent, RegistrationOfficer", "No permissions columns (undefined)"],
-    "user_rule_assignments": ["Composite PK (user_id, rule_id)", "UQ (user_id): one current Rule today (Q17)"],
+    "user_rule_assignments": ["Composite PK (user_id, rule_id): the same Rule cannot be assigned twice",
+                              "No unique constraint on user_id: one or several Rules is an open decision (Q17)"],
     "user_rule_history": ["Append-only",
                           "CHECK reason IN (Registered, DependentAdded, LastDependentUnlinked, AgeTransition, OfficerAssigned, OfficerRemoved)"],
     "user_accessibility_needs": ["Junction table: Composite PK (user_id, disability_type_id)",
-                                 "FK user_id -> external_user_profiles.user_id ON DELETE CASCADE"],
+                                 "FK user_id -> AspNetUsers.Id ON DELETE CASCADE"],
     "user_settings": ["CHECK language IN (ar, en)", "No accessibility mode column (frontend only)"],
-    "user_credentials": ["Password accounts only: social-only users have no row"],
-    "external_logins": ["UQ (user_id, provider)", "UQ (provider, provider_subject)", "CHECK provider IN (Google, Apple)"],
     "otp_challenges": ["CHECK purpose IN (Registration, Login, PasswordReset, DependentVerification, EmailChange)",
-                       "pending_payload = ciphertext bytes, cleared on use"],
+                       "CHECK channel = Email (the only channel)", "pending_payload = ciphertext bytes, cleared on use"],
     "verification_lockouts": ["Composite PK (purpose, scope_key)", "No FK by design (key is a hash or a Parent id)"],
     "user_sessions": ["expires_at NULL = active until explicit logout"],
-    "quick_login_registrations": ["UQ (device_id) WHERE is_enabled = 1", "CHECK enabled XOR revoked_at set",
+    "quick_login_registrations": ["UQ (device_id) WHERE is_enabled = 1", "CHECK is_enabled = 1 XOR disabled_at set",
                                   "Stores a public key only, never a Device PIN"],
     "family_links": ["UQ (guardian_user_id, dependent_user_id) WHERE status = 'Active'",
                      "CHECK guardian_user_id <> dependent_user_id", "CHECK status IN (Active, Unlinked)",
@@ -87,7 +91,7 @@ DISABILITY_SEED = [(1, "Unable to Walk", "عدم القدرة على المشي"
                    (2, "Unable to Walk Long Distances", "عدم القدرة على المشي لمسافات طويلة"),
                    (3, "Visual Impairment / Blindness", "ضعف البصر / العمى"),
                    (4, "Hearing Loss / Deafness", "فقد حاسة السمع")]
-EXCLUDED = {"job_executions", "accessibility_modes", "user_accessibility_modes"}
+EXCLUDED = {"job_executions", "accessibility_modes", "user_accessibility_modes", "external_user_profiles", "internal_user_profiles", "user_credentials", "external_logins"}
 EXCLUDED_COLUMNS = {"accessibility_mode_id", "rule_id"}  # rule_id is on assignments/history only, never on users
 
 
@@ -190,6 +194,7 @@ class Box:
         if self.name in JUNCTIONS: tags.append("junction")
         if self.module == "Cms" and self.name != "onboarding_completions": tags.append("cache")
         s = self.status.lower()
+        if self.name.startswith("AspNet"): tags.insert(0, "ASP.NET Identity")
         if "conditional" in s: tags.append("conditional")
         if "deferred" in s: tags.append("details deferred")
         if "provisional" in s: tags.append("provisional")
@@ -249,31 +254,32 @@ def detail_layouts():
     S = lambda t: f"stub:{t}"
     return {
         "UsersIdentity": dict(rows=[
-            ("grid", {2: "user_settings"}, 0),
-            ("grid", {0: "avatars", 1: "external_user_profiles", 2: "users", 3: "user_rule_assignments", 4: "rules"}, 90),
+            ("grid", {1: "internal_users", 2: "user_settings", 3: "AspNetUserLogins", 4: "AspNetUserTokens"}, 0),
+            ("grid", {0: "avatars", 1: "external_users", 2: "AspNetUsers", 3: "user_rule_assignments", 4: "rules"}, 90),
             ("grid", {0: "disability_types", 1: "user_accessibility_needs", 3: "user_rule_history", 4: S("family_links")}, 90),
-            ("flow", ["user_credentials", "external_logins", "otp_challenges", "user_sessions", "quick_login_registrations", "login_audit", "verification_lockouts"], "users", 190),
+            ("flow", ["AspNetUserClaims", "AspNetUserRoles", "otp_challenges", "user_sessions", "quick_login_registrations", "login_audit", "verification_lockouts"], "AspNetUsers", 190),
+            ("flow", ["AspNetRoles", "AspNetRoleClaims"], "AspNetUserRoles", 110),
         ], gapx=120),
-        "Family": dict(rows=[("grid", {0: S("users"), 1: "family_links"}, 0)], gapx=260),
-        "Notifications": dict(rows=[("grid", {1: S("users")}, 0),
+        "Family": dict(rows=[("grid", {0: S("AspNetUsers"), 1: "family_links"}, 0)], gapx=260),
+        "Notifications": dict(rows=[("grid", {1: S("AspNetUsers")}, 0),
                                     ("grid", {0: "notifications", 1: "notification_deliveries", 2: "push_device_tokens"}, 150)], gapx=110),
         "Platform": dict(rows=[("grid", {0: "system_settings", 1: "country_calling_codes"}, 0)], gapx=110),
-        "Support": dict(rows=[("grid", {1: S("users")}, 0),
+        "Support": dict(rows=[("grid", {1: S("AspNetUsers")}, 0),
                               ("grid", {0: "ticket_types", 1: "support_tickets", 2: "ticket_attachments"}, 120)], gapx=110),
         "Cms": dict(rows=[
             ("grid", {0: "exhibition_node_translations", 1: "exhibition_nodes", 2: "exhibitions", 3: "exhibition_translations"}, 0),
             ("grid", {0: "content_pages", 1: "update_categories", 2: "updates", 3: "update_translations"}, 100),
-            ("grid", {2: "onboarding_completions", 3: S("users")}, 100)], gapx=110),
+            ("grid", {2: "onboarding_completions", 3: S("AspNetUsers")}, 100)], gapx=110),
     }
 
 
 def overview_layouts():
     return {
         "UsersIdentity": dict(rows=[
-            ("grid", {2: "avatars"}, 0),
-            ("grid", {0: "disability_types", 1: "user_accessibility_needs", 2: "external_user_profiles", 3: "users", 4: "user_settings"}, 60),
-            ("flow", ["user_credentials", "external_logins", "otp_challenges", "user_sessions", "user_rule_assignments", "rules",
-                      "user_rule_history", "quick_login_registrations", "login_audit", "verification_lockouts"], "users", 150),
+            ("grid", {0: "disability_types", 1: "user_accessibility_needs", 2: "external_users", 3: "AspNetUsers", 4: "user_settings", 5: "internal_users"}, 60),
+            ("flow", ["AspNetUserLogins", "AspNetUserTokens", "AspNetUserClaims", "AspNetUserRoles", "otp_challenges", "user_sessions", "avatars", "user_rule_assignments",
+                      "rules", "user_rule_history", "quick_login_registrations", "login_audit", "verification_lockouts"], "AspNetUsers", 150),
+            ("flow", ["AspNetRoles", "AspNetRoleClaims"], "AspNetUserRoles", 90),
         ], gapx=46),
         "Family": dict(rows=[("grid", {0: "family_links"}, 0)], gapx=46),
         "Notifications": dict(rows=[("grid", {0: "notifications", 1: "notification_deliveries", 2: "push_device_tokens"}, 0)], gapx=46),
@@ -653,7 +659,7 @@ def build_detail(mod, entities, rels, inv):
 
 def build_overview(entities, rels, inv):
     specs = overview_layouts()
-    d = Diagram("overview", "ilmi database — overall ERD", "Six modules · 34 tables · key columns only (all attributes are in the six detailed module diagrams)")
+    d = Diagram("overview", "ilmi database — overall ERD", "Six modules · 39 tables · key columns only (all attributes are in the six detailed module diagrams)")
     local = {}
     for mod, spec in specs.items():
         tables = [t for t, i in inv.items() if i["module"] == mod]
@@ -781,11 +787,11 @@ def validate(entities, rels, inv, diagrams):
     def check(name, ok, detail=""):
         res.append((name, bool(ok), detail))
     tables = set(inv)
-    check("34 tables in the inventory", len(tables) == 34, f"{len(tables)}")
+    check("39 tables in the inventory", len(tables) == 39, f"{len(tables)}")
     per = {}
     for t, i in inv.items(): per.setdefault(i["module"], []).append(t)
     check("six modules", set(per) == set(MODULES), ", ".join(f"{MODULES[m]['title']}={len(per[m])}" for m in MODULES))
-    check("module table counts 16/1/3/2/3/9", [len(per[m]) for m in ("UsersIdentity", "Family", "Notifications", "Platform", "Support", "Cms")] == [16, 1, 3, 2, 3, 9])
+    check("module table counts 21/1/3/2/3/9", [len(per[m]) for m in ("UsersIdentity", "Family", "Notifications", "Platform", "Support", "Cms")] == [21, 1, 3, 2, 3, 9])
     real = {n for n in entities if n not in STUB_MODULE}
     check("every ERD entity is in the inventory", real == tables, f"extra={sorted(real - tables)} missing={sorted(tables - real)}")
     drawn = {b.name for d in diagrams if d.key != "overview" for b in d.boxes.values() if not b.stub}
@@ -796,21 +802,36 @@ def validate(entities, rels, inv, diagrams):
     allcols = {(e.name, a.name) for e in entities.values() for a in e.attrs}
     check("no accessibility_mode_id anywhere", not any(c == "accessibility_mode_id" for _, c in allcols))
     check("user_settings has no accessibility mode column", all("accessib" not in a.name for a in entities["user_settings"].attrs))
-    check("users has no rule_id (replaced by user_rule_assignments)", not any(a.name == "rule_id" for a in entities["users"].attrs))
-    ucols = {a.name for a in entities["users"].attrs}
-    check("users has is_active (IsActive) and updated_at (UpdatedOn) and user_kind", {"is_active", "updated_at", "user_kind"} <= ucols)
-    check("users keeps account_status", "account_status" in ucols)
+    ucols = {a.name for a in entities["AspNetUsers"].attrs}
+    check("AspNetUsers (the Identity users table) is the main users table with the Identity columns",
+          {"Id", "UserName", "NormalizedUserName", "Email", "NormalizedEmail", "PasswordHash", "LockoutEnd", "LockoutEnabled", "AccessFailedCount", "SecurityStamp"} <= ucols)
+    check("AspNetUsers carries UserKind, AccountStatus, IsActive, UpdatedOn, PendingActivationExpiresAt and FirstName/LastName",
+          {"UserKind", "AccountStatus", "IsActive", "UpdatedOn", "PendingActivationExpiresAt", "FirstName", "LastName"} <= ucols)
+    check("AspNetUsers has no rule column and no profile-table data (date of birth, QR code)", not ({"RuleId", "IsParent", "DateOfBirth", "QrCode"} & ucols))
+    check("mobile number and UserType are on AspNetUsers, so one unique index can cover Internal and External users",
+          {"MobileCountryCode", "MobileNationalNumber", "UserType", "MobileUniquenessKey"} <= ucols)
+    check("PasswordHash is nullable (social-only users have none)", next(a for a in entities["AspNetUsers"].attrs if a.name == "PasswordHash").null)
+    check("the two Identity-linked profile tables exist", {"external_users", "internal_users"} <= set(entities))
+    ext = {a.name for a in entities["external_users"].attrs}
+    check("external_users has date of birth, QR code and consents, and no mobile or user type (those are on AspNetUsers)",
+          {"date_of_birth", "qr_code", "terms_accepted_at", "receive_newsletter"} <= ext and not ({"mobile_country_code", "mobile_national_number", "user_type"} & ext))
+    check("internal_users has no employee attributes", not any(re.search(r"(?i)employee|department|job_?title", a.name) for a in entities["internal_users"].attrs))
+    for prof in ("external_users", "internal_users"):
+        r = nd.get(("AspNetUsers", prof)) if False else None
     check("disability_types is a lookup with 4 seed rows", "disability_types" in LOOKUPS and len(DISABILITY_SEED) == 4)
     ua = entities["user_accessibility_needs"]
     check("user_accessibility_needs is a composite-PK junction", [a.name for a in ua.attrs if a.pk] == ["user_id", "disability_type_id"])
     nd = {(norm(r.a), norm(r.b)): r for r in rels}
     r = nd.get(("notifications", "notification_deliveries"))
     check("notifications -> notification_deliveries is 1:N physical", r and not r.logical and r.tl == "zero_one" and r.tr == "zero_many")
-    r = nd.get(("users", "user_settings")); check("users -> user_settings 1:0..1", r and r.tl == "one" and r.tr == "zero_one")
-    r = nd.get(("users", "external_user_profiles")); check("users -> external_user_profiles 1:0..1", r and r.tl == "one" and r.tr == "zero_one")
-    r = nd.get(("users", "user_credentials")); check("users -> user_credentials 1:0..1 (social-only users have none)", r and r.tr == "zero_one")
-    r = nd.get(("users", "user_rule_assignments")); check("users -> user_rule_assignments 1:0..1 (UQ user_id)", r and r.tr == "zero_one")
-    check("user_credentials.password_hash is NOT NULL", not next(a for a in entities["user_credentials"].attrs if a.name == "password_hash").null)
+    r = nd.get(("AspNetUsers", "user_settings")); check("AspNetUsers -> user_settings 1:0..1", r and r.tl == "one" and r.tr == "zero_one")
+    for prof in ("external_users", "internal_users"):
+        r = nd.get(("AspNetUsers", prof)); check(f"AspNetUsers -> {prof} physical FK 1:0..1", r and not r.logical and r.tl == "one" and r.tr == "zero_one")
+    r = nd.get(("AspNetUsers", "AspNetUserLogins")); check("AspNetUsers -> AspNetUserLogins 1:N (Google/Apple)", r and not r.logical and r.tr == "zero_many")
+    r = nd.get(("AspNetUsers", "user_accessibility_needs"))
+    check("AspNetUsers -> user_accessibility_needs 1:N through the composite-key junction", r and not r.logical and r.tr == "zero_many")
+    r = nd.get(("AspNetUsers", "user_rule_assignments")); check("AspNetUsers -> user_rule_assignments 1:N (no UQ on user_id: single vs several Rules is open)", r and r.tr == "zero_many")
+    check("otp_challenges has the Email-only channel column", any(a.name == "channel" for a in entities["otp_challenges"].attrs))
     check("user_sessions.expires_at is nullable (until explicit logout)", next(a for a in entities["user_sessions"].attrs if a.name == "expires_at").null)
     check("pending_payload is varbinary(max)", next(a for a in entities["otp_challenges"].attrs if a.name == "pending_payload").type == "varbinary(max)")
     check("no passcode columns in quick_login_registrations",
@@ -821,10 +842,6 @@ def validate(entities, rels, inv, diagrams):
     check("no physical FK crosses a module boundary", not phys_bad)
     intra_logical = [r for r in rels if r.logical and inv[norm(r.a)]["module"] == inv[norm(r.b)]["module"]]
     check("no logical line inside one module (those are physical FKs)", not intra_logical, ", ".join(f"{r.a}-{r.b}" for r in intra_logical))
-    for t in ("users", "external_user_profiles"):
-        for a in entities[t].attrs:
-            if re.search(r"(?i)employee|department|job_?title", a.name): check(f"no invented internal attribute in {t}", False, a.name)
-    check("no internal_user_profiles / employee attributes", "internal_user_profiles" not in entities)
     check("one PK on every table", all(any(a.pk for a in entities[t].attrs) for t in tables))
     return res
 

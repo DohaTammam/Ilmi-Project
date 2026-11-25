@@ -25,47 +25,70 @@ Diagram index: [1 Users core](#1-users--identity--accounts-and-profiles), [2 Rul
 
 ## 1. Users & Identity: accounts and profiles
 
-Schema `users`. `users` is the shared account for both user kinds. Everything specific to external people is in `external_user_profiles`.
-There is **no** `internal_user_profiles` table: the requirements define no internal-only attributes (Open).
+Schema `users`. **`AspNetUsers` is ASP.NET Core Identity's users table and the main users table**: email, password hash, lockout, security stamp
+and phone fields come from Identity; the module adds the shared account fields. Person data lives in two profile tables, each with a foreign key
+to `AspNetUsers`: `external_users` (visitors, parents, teens, children) and `internal_users` (staff). Email is the login identifier and stays on `AspNetUsers`.
+**The mobile number and `UserType` are on `AspNetUsers` too**, so that ONE unique index can keep mobile numbers unique across Internal and External users
+(Children excepted). In code, the Identity user lives in Infrastructure and the Domain `User` is a plain class; both map the same `AspNetUsers` row.
+Identity tables keep Identity's standard names and columns; the module's own tables use snake_case.
 
 ```mermaid
 erDiagram
-  users ||--o| external_user_profiles : "physical FK, 1 : 0..1"
-  users ||--o| user_settings : "physical FK, 1 : 0..1"
-  avatars |o--o{ external_user_profiles : "physical FK"
-  external_user_profiles ||--o{ user_accessibility_needs : "physical FK"
+  AspNetUsers ||--o| external_users : "physical FK (UserId, UserKind), 1 : 0..1"
+  AspNetUsers ||--o| internal_users : "physical FK (UserId, UserKind), 1 : 0..1"
+  AspNetUsers ||--o| user_settings : "physical FK, 1 : 0..1"
+  avatars |o--o{ external_users : "physical FK"
+  AspNetUsers ||--o{ user_accessibility_needs : "physical FK, cascade"
   disability_types ||--o{ user_accessibility_needs : "physical FK"
 
-  users {
-    uniqueidentifier id PK
-    varchar(8) user_kind "External|Internal; UQ(id,user_kind)"
-    nvarchar(250) first_name
-    nvarchar(250) last_name
-    nvarchar(250) email UK "lower-case, case-insensitive"
-    varchar(17) account_status "Active|PendingActivation|Deactivated; lifecycle"
-    bit is_active "default 1; administrative access gate"
-    datetime2(3) activation_expires_at "null; required while PendingActivation"
-    datetime2(3) created_at "default SYSUTCDATETIME()"
-    datetime2(3) updated_at "UpdatedOn; set by EF interceptor"
-    uniqueidentifier created_by "null; FK users.id"
-    uniqueidentifier updated_by "null; FK users.id"
-    rowversion row_version
+  AspNetUsers {
+    uniqueidentifier Id PK "Identity key"
+    nvarchar(256) UserName "the email address"
+    nvarchar(256) NormalizedUserName UK "null; Identity UserNameIndex"
+    nvarchar(256) Email "null; as entered"
+    nvarchar(256) NormalizedEmail UK "null; login identifier; unique filtered index"
+    bit EmailConfirmed
+    nvarchar(max) PasswordHash "null; Identity hash; null for social-only users"
+    nvarchar(max) SecurityStamp "null"
+    nvarchar(max) ConcurrencyStamp "null"
+    nvarchar(max) PhoneNumber "null; not used: mobile is in the profile tables"
+    bit PhoneNumberConfirmed
+    bit TwoFactorEnabled
+    datetimeoffset LockoutEnd "null"
+    bit LockoutEnabled
+    int AccessFailedCount
+    nvarchar(250) FirstName
+    nvarchar(250) LastName
+    varchar(8) UserKind "External|Internal; UQ(Id,UserKind)"
+    varchar(5) MobileCountryCode "null; required for External, optional for Internal"
+    varchar(15) MobileNationalNumber "null; unique with country code and MobileUniquenessKey (ux_users_mobile)"
+    varchar(5) UserType "null; Child|Teen|Adult; External only, NULL for Internal"
+    varchar(36) MobileUniquenessKey "computed, persisted: the user's own Id for a Child, empty for everyone else"
+    varchar(17) AccountStatus "Active|PendingActivation|Deactivated; lifecycle"
+    datetime2(3) PendingActivationExpiresAt "null; required while PendingActivation"
+    bit IsActive "administrative access gate"
+    datetime2(3) CreatedAt
+    uniqueidentifier CreatedBy "null; FK AspNetUsers.Id"
+    datetime2(3) UpdatedOn "set automatically by the EF interceptor"
+    uniqueidentifier UpdatedBy "null; FK AspNetUsers.Id"
+    rowversion RowVersion
   }
-  external_user_profiles {
-    uniqueidentifier user_id PK "FK users.id"
+  external_users {
+    uniqueidentifier user_id PK "FK AspNetUsers.Id"
     varchar(8) user_kind "fixed External; FK (user_id,user_kind)"
     date date_of_birth
     varchar(6) gender "null; Male|Female"
-    varchar(5) user_type "Child|Teen|Adult; age based"
-    varchar(5) mobile_country_code
-    varchar(15) mobile_national_number "filtered UQ with country code WHERE user_type IN (Teen,Adult)"
     char(10) qr_code UK "0-9 A-Z"
     smallint avatar_id FK "null"
     bit receive_newsletter
     bit notify_ilmi_special_needs
     datetime2(3) terms_accepted_at
-    datetime2(3) created_at
-    datetime2(3) updated_at "null"
+    rowversion row_version
+  }
+  internal_users {
+    uniqueidentifier user_id PK "FK AspNetUsers.Id"
+    varchar(8) user_kind "fixed Internal; FK (user_id,user_kind)"
+    date date_of_birth "null"
     rowversion row_version
   }
   avatars {
@@ -86,16 +109,18 @@ erDiagram
     bit is_active
   }
   user_accessibility_needs {
-    uniqueidentifier user_id PK "FK external_user_profiles.user_id, cascade"
+    uniqueidentifier user_id PK "FK AspNetUsers.Id, cascade"
     smallint disability_type_id PK "FK disability_types.id, restrict"
     datetime2(3) created_at
   }
   user_settings {
-    uniqueidentifier user_id PK "FK users.id"
+    uniqueidentifier user_id PK "FK AspNetUsers.Id"
     char(2) language "ar|en"
-    bit email_notifications_enabled "default 1"
+    bit email_notifications_enabled
     datetime2(3) created_at
-    datetime2(3) updated_at "null"
+    uniqueidentifier created_by "null"
+    datetime2(3) updated_at "UpdatedOn"
+    uniqueidentifier updated_by "null"
     rowversion row_version
   }
 ```
@@ -104,37 +129,37 @@ erDiagram
 
 ## 2. Users & Identity: Rules
 
-`UserType` (age) and `Rule` (business category) are separate. A Parent keeps `user_type = Adult`. `user_rule_assignments` holds the **current** Rule;
-`user_rule_history` is the append-only record of every change.
+`UserType` (age) and `Rule` (business category) are separate. A Parent keeps `UserType = Adult`. `user_rule_assignments` holds the Rules **currently** assigned (PK (user_id, rule_id): the same Rule cannot be assigned twice; no unique constraint on user_id because one-or-several is an open decision);
+`user_rule_history` is the append-only record of every change. Rules are **not** Identity roles: Identity roles (`AspNetRoles`) are security roles and are separate.
 
 ```mermaid
 erDiagram
-  users ||--o| user_rule_assignments : "physical FK; UQ(user_id) = one current Rule today (Q17)"
+  AspNetUsers ||--o{ user_rule_assignments : "physical FK; one or several Rules is open (Q17)"
   rules ||--o{ user_rule_assignments : "physical FK"
-  users ||--o{ user_rule_history : "physical FK"
+  AspNetUsers ||--o{ user_rule_history : "physical FK"
   rules |o--o{ user_rule_history : "physical FK from_rule_id"
   rules ||--o{ user_rule_history : "physical FK to_rule_id"
   user_rule_history }o..o| Family_family_links : "logical -> family.family_links.id"
 
-  users {
-    uniqueidentifier id PK
-    varchar(8) user_kind
+  AspNetUsers {
+    uniqueidentifier Id PK
+    varchar(8) UserKind
   }
   rules {
     smallint id PK
-    varchar(30) code UK "Child|Teen|Adult|Parent|RegistrationOfficer"
+    varchar(30) code UK "CHILD|TEEN|ADULT|PARENT|REGISTRATION_OFFICER"
     nvarchar(100) name_en
-    nvarchar(100) name_ar "Arabic names not provided"
+    nvarchar(100) name_ar "null; Arabic names not provided"
     bit is_age_based "1 for Child, Teen, Adult"
-    bit is_staff "1 for RegistrationOfficer"
+    bit is_staff "1 for REGISTRATION_OFFICER"
     tinyint sort_order
     bit is_active
   }
   user_rule_assignments {
-    uniqueidentifier user_id PK "FK users.id; also UQ(user_id) while single Rule"
+    uniqueidentifier user_id PK "FK AspNetUsers.Id"
     smallint rule_id PK "FK rules.id"
     datetime2(3) assigned_at
-    uniqueidentifier assigned_by "null; FK users.id; null = system"
+    uniqueidentifier assigned_by "null; FK AspNetUsers.Id; null = system"
   }
   user_rule_history {
     bigint id PK "identity"
@@ -144,7 +169,7 @@ erDiagram
     varchar(30) reason "Registered|DependentAdded|LastDependentUnlinked|AgeTransition|OfficerAssigned|OfficerRemoved"
     uniqueidentifier related_family_link_id "null; logical -> family.family_links.id"
     datetime2(3) changed_at
-    uniqueidentifier changed_by "null; FK users.id; null = system"
+    uniqueidentifier changed_by "null; FK AspNetUsers.Id; null = system"
   }
   Family_family_links {
     uniqueidentifier id PK "owned by Family"
@@ -153,46 +178,79 @@ erDiagram
 
 ---
 
-## 3. Users & Identity: authentication
+## 3. Users & Identity: ASP.NET Core Identity tables and authentication
 
-One authentication infrastructure for both user kinds. Social-only users have **no** `user_credentials` row. Same module, so `user_id` here is a physical FK
-(restrict, users are never hard-deleted).
+Identity's standard tables: roles, claims, **external logins (Google and Apple, `AspNetUserLogins`)** and tokens. They are created by the Identity model and stay
+empty or unused until needed (no roles are defined by the requirements). **Social-only users have a null `PasswordHash`.** Password, lockout (`LockoutEnd`, `AccessFailedCount`)
+and external logins are handled by Identity; the module adds email OTP, sessions, Quick Login and the login audit.
 
 ```mermaid
 erDiagram
-  users ||--o| user_credentials : "physical FK; password accounts only"
-  users ||--o{ external_logins : "physical FK; Google/Apple"
-  users |o--o{ otp_challenges : "physical FK user_id"
-  users |o--o{ otp_challenges : "physical FK initiated_by_user_id"
-  users ||--o{ user_sessions : "physical FK"
-  users ||--o{ quick_login_registrations : "physical FK"
-  users |o--o{ login_audit : "physical FK"
+  AspNetUsers ||--o{ AspNetUserLogins : "physical FK; Google|Apple"
+  AspNetUsers ||--o{ AspNetUserRoles : "physical FK"
+  AspNetRoles ||--o{ AspNetUserRoles : "physical FK"
+  AspNetUsers ||--o{ AspNetUserClaims : "physical FK"
+  AspNetRoles ||--o{ AspNetRoleClaims : "physical FK"
+  AspNetUsers ||--o{ AspNetUserTokens : "physical FK"
 
-  users {
-    uniqueidentifier id PK
-    varchar(8) user_kind
-    varchar(17) account_status
-    bit is_active
+  AspNetUsers {
+    uniqueidentifier Id PK
+    varchar(8) UserKind
   }
-  user_credentials {
-    uniqueidentifier user_id PK "FK users.id"
-    varchar(256) password_hash "NOT NULL; salted adaptive hash"
-    datetime2(3) password_changed_at
-    tinyint failed_login_count "default 0"
-    datetime2(3) locked_until "null"
-    rowversion row_version
+  AspNetRoles {
+    uniqueidentifier Id PK
+    nvarchar(256) Name "null; security role, not a business Rule"
+    nvarchar(256) NormalizedName UK "null"
+    nvarchar(max) ConcurrencyStamp "null"
   }
-  external_logins {
-    uniqueidentifier id PK
-    uniqueidentifier user_id FK "UQ(user_id,provider)"
-    varchar(6) provider "Google|Apple; UQ(provider,provider_subject)"
-    varchar(255) provider_subject
-    nvarchar(250) provider_email
-    datetime2(3) created_at
+  AspNetUserRoles {
+    uniqueidentifier UserId PK "FK AspNetUsers.Id"
+    uniqueidentifier RoleId PK "FK AspNetRoles.Id"
+  }
+  AspNetUserClaims {
+    int Id PK "identity"
+    uniqueidentifier UserId FK
+    nvarchar(max) ClaimType "null"
+    nvarchar(max) ClaimValue "null"
+  }
+  AspNetRoleClaims {
+    int Id PK "identity"
+    uniqueidentifier RoleId FK
+    nvarchar(max) ClaimType "null"
+    nvarchar(max) ClaimValue "null"
+  }
+  AspNetUserLogins {
+    nvarchar(128) LoginProvider PK "Google|Apple; UQ(UserId,LoginProvider)"
+    nvarchar(128) ProviderKey PK "the provider subject"
+    nvarchar(max) ProviderDisplayName "null"
+    uniqueidentifier UserId FK "UQ(UserId,LoginProvider)"
+  }
+  AspNetUserTokens {
+    uniqueidentifier UserId PK "FK AspNetUsers.Id"
+    nvarchar(128) LoginProvider PK
+    nvarchar(128) Name PK
+    nvarchar(max) Value "null"
+  }
+```
+
+```mermaid
+erDiagram
+  AspNetUsers |o--o{ otp_challenges : "physical FK user_id"
+  AspNetUsers |o--o{ otp_challenges : "physical FK initiated_by_user_id"
+  AspNetUsers ||--o{ user_sessions : "physical FK"
+  AspNetUsers ||--o{ quick_login_registrations : "physical FK"
+  AspNetUsers |o--o{ login_audit : "physical FK"
+
+  AspNetUsers {
+    uniqueidentifier Id PK
+    varchar(8) UserKind
+    varchar(17) AccountStatus
+    bit IsActive
   }
   otp_challenges {
     uniqueidentifier id PK
     varchar(25) purpose "Registration|Login|PasswordReset|DependentVerification|EmailChange"
+    varchar(5) channel "Email (the only channel); CHECK = Email"
     nvarchar(250) target_email "OTP is sent by email only"
     uniqueidentifier user_id FK "null"
     uniqueidentifier initiated_by_user_id FK "null; the Parent"
@@ -236,8 +294,8 @@ erDiagram
     bit is_enabled
     datetime2(3) enabled_at
     datetime2(3) last_used_at "null"
-    datetime2(3) revoked_at "null"
-    varchar(25) revoked_reason "null"
+    datetime2(3) disabled_at "null; DisabledAt"
+    varchar(25) disabled_reason "null; DisabledReason"
   }
   login_audit {
     bigint id PK "identity"
@@ -255,7 +313,7 @@ erDiagram
 
 ## 4. Family
 
-Schema `family`. Both user columns are **logical** references to `users.users.id`.
+Schema `family`. Both user columns are **logical** references to `AspNetUsers.Id`.
 
 ```mermaid
 erDiagram
@@ -268,13 +326,13 @@ erDiagram
   }
   family_links {
     uniqueidentifier id PK
-    uniqueidentifier guardian_user_id "logical -> users.users.id; CHECK <> dependent"
-    uniqueidentifier dependent_user_id "logical -> users.users.id; filtered UQ(guardian,dependent) WHERE status = Active"
+    uniqueidentifier guardian_user_id "logical -> AspNetUsers.Id; CHECK <> dependent"
+    uniqueidentifier dependent_user_id "logical -> AspNetUsers.Id; filtered UQ(guardian,dependent) WHERE status = Active"
     varchar(8) status "Active|Unlinked"
     varchar(10) link_method "Created|QrScan|ManualCode"
     datetime2(3) linked_at
     datetime2(3) unlinked_at "null"
-    uniqueidentifier unlinked_by_user_id "null; logical -> users.users.id"
+    uniqueidentifier unlinked_by_user_id "null; logical -> AspNetUsers.Id"
     datetime2(3) created_at
     datetime2(3) updated_at "null"
     uniqueidentifier created_by "null; logical"
@@ -303,7 +361,7 @@ erDiagram
   }
   notifications {
     bigint id PK "identity"
-    uniqueidentifier user_id "logical -> users.users.id"
+    uniqueidentifier user_id "logical -> AspNetUsers.Id"
     varchar(20) template_code
     nvarchar(max) parameters_json "null; never secrets"
     datetime2(3) created_at
@@ -313,7 +371,7 @@ erDiagram
   notification_deliveries {
     bigint id PK "identity"
     bigint notification_id FK "null; SET NULL"
-    uniqueidentifier user_id "null; logical -> users.users.id"
+    uniqueidentifier user_id "null; logical -> AspNetUsers.Id"
     varchar(5) channel "Email|Sms|Push"
     nvarchar(250) recipient "sensitive"
     varchar(20) template_code
@@ -328,7 +386,7 @@ erDiagram
   }
   push_device_tokens {
     uniqueidentifier id PK "conditional table"
-    uniqueidentifier user_id "logical -> users.users.id; UQ(user_id,device_id)"
+    uniqueidentifier user_id "logical -> AspNetUsers.Id; UQ(user_id,device_id)"
     varchar(100) device_id
     varchar(7) platform "iOS|Android"
     nvarchar(500) token
@@ -398,7 +456,7 @@ erDiagram
     uniqueidentifier id PK
     int ticket_number UK "from a SEQUENCE; format Deferred"
     smallint ticket_type_id FK
-    uniqueidentifier user_id "null; logical -> users.users.id"
+    uniqueidentifier user_id "null; logical -> AspNetUsers.Id"
     nvarchar(250) first_name "contact snapshot"
     nvarchar(250) last_name
     nvarchar(250) email
@@ -532,7 +590,7 @@ erDiagram
   }
   onboarding_completions {
     bigint id PK "identity"
-    uniqueidentifier user_id "null; logical -> users.users.id"
+    uniqueidentifier user_id "null; logical -> AspNetUsers.Id"
     varchar(100) device_id
     varchar(7) platform "null"
     datetime2(3) completed_at

@@ -1,28 +1,34 @@
-[PASS] 34 tables in the inventory  (34)
-[PASS] six modules  (Users & Identity=16, Family=1, Notifications=3, Platform=2, Support=3, CMS=9)
-[PASS] module table counts 16/1/3/2/3/9
+[PASS] 39 tables in the inventory  (39)
+[PASS] six modules  (Users & Identity=21, Family=1, Notifications=3, Platform=2, Support=3, CMS=9)
+[PASS] module table counts 21/1/3/2/3/9
 [PASS] every ERD entity is in the inventory  (extra=[] missing=[])
 [PASS] every table appears in a detailed diagram  (missing=[])
 [PASS] every table appears in the overview
 [PASS] excluded tables absent
 [PASS] no accessibility_mode_id anywhere
 [PASS] user_settings has no accessibility mode column
-[PASS] users has no rule_id (replaced by user_rule_assignments)
-[PASS] users has is_active (IsActive) and updated_at (UpdatedOn) and user_kind
-[PASS] users keeps account_status
+[PASS] AspNetUsers (the Identity users table) is the main users table with the Identity columns
+[PASS] AspNetUsers carries UserKind, AccountStatus, IsActive, UpdatedOn, PendingActivationExpiresAt and FirstName/LastName
+[PASS] AspNetUsers has no rule column and no profile-table data (date of birth, QR code)
+[PASS] mobile number and UserType are on AspNetUsers, so one unique index can cover Internal and External users
+[PASS] PasswordHash is nullable (social-only users have none)
+[PASS] the two Identity-linked profile tables exist
+[PASS] external_users has date of birth, QR code and consents, and no mobile or user type (those are on AspNetUsers)
+[PASS] internal_users has no employee attributes
 [PASS] disability_types is a lookup with 4 seed rows
 [PASS] user_accessibility_needs is a composite-PK junction
 [PASS] notifications -> notification_deliveries is 1:N physical
-[PASS] users -> user_settings 1:0..1
-[PASS] users -> external_user_profiles 1:0..1
-[PASS] users -> user_credentials 1:0..1 (social-only users have none)
-[PASS] users -> user_rule_assignments 1:0..1 (UQ user_id)
-[PASS] user_credentials.password_hash is NOT NULL
+[PASS] AspNetUsers -> user_settings 1:0..1
+[PASS] AspNetUsers -> external_users physical FK 1:0..1
+[PASS] AspNetUsers -> internal_users physical FK 1:0..1
+[PASS] AspNetUsers -> AspNetUserLogins 1:N (Google/Apple)
+[PASS] AspNetUsers -> user_accessibility_needs 1:N through the composite-key junction
+[PASS] AspNetUsers -> user_rule_assignments 1:N (no UQ on user_id: single vs several Rules is open)
+[PASS] otp_challenges has the Email-only channel column
 [PASS] user_sessions.expires_at is nullable (until explicit logout)
 [PASS] pending_payload is varbinary(max)
 [PASS] no passcode columns in quick_login_registrations
 [PASS] every cross-module relationship is logical (dashed)  (9 relationships)
 [PASS] no physical FK crosses a module boundary
 [PASS] no logical line inside one module (those are physical FKs)
-[PASS] no internal_user_profiles / employee attributes
 [PASS] one PK on every table

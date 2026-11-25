@@ -61,7 +61,7 @@ Platform is the only module with no outgoing module dependency. Accessibility mo
 
 | Module | Schema | Owns | SRS |
 |---|---|---|---|
-| Users & Identity | `users` | accounts (External and Internal), external profiles, Rules, special needs, user settings, credentials, social logins, OTP, sessions, Quick Login, login audit | UC002-UC008 |
+| Users & Identity | `users` | **implemented on ASP.NET Core Identity**: `AspNetUsers` (main users table) with `external_users` / `internal_users`, Identity roles/claims/logins, Rules, special needs, user settings, OTP, sessions, Quick Login, login audit | UC002-UC008 |
 | Family | `family` | family_links, Rule-transition triggers | UC013-UC017 |
 | Notifications | `notifications` | in-app notifications, delivery outbox, push tokens | UC020, section 4 |
 | Platform | `platform` | system_settings, country_calling_codes | configuration, GSR017 |
@@ -87,7 +87,7 @@ Infrastructure ─► Application      Application ──► own Contracts
 ## 4. Backend project and folder structure
 
 ```text
-Ilmi.sln                                   35 projects
+Ilmi.sln                                   36 projects
 src/
   Host/        Ilmi.Api   Ilmi.Worker
   BuildingBlocks/  Ilmi.SharedKernel

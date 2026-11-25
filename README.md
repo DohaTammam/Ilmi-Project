@@ -6,9 +6,8 @@ Backend for the **ilmi Web & Mobile Application** (Phase 1) on **ASP.NET Core / 
 - **Architectural pattern:** Clean Architecture *inside each module*.
 - Source of requirements: *ilmi Web & Application Phase 1 SRS v3.1*. Open requirement conflicts: [docs/srs-open-questions.md](docs/srs-open-questions.md).
 
-> **Status: architecture, skeleton and database design only.** There is no business logic, no endpoints and no database code.
-> The only code is two empty host entry points and the architecture tests that guard the structure.
-> Nothing in the database design may be implemented before it is approved.
+> **Status: Users & Identity is implemented** (domain, application, EF Core persistence with the initial migration, API, tests). The other five modules are architecture skeleton and database design only.
+> Migrations are never applied automatically. Secrets and connection strings come from user-secrets or environment variables.
 
 ## Documents
 
@@ -24,7 +23,7 @@ Backend for the **ilmi Web & Mobile Application** (Phase 1) on **ASP.NET Core / 
 
 | Module | Schema | Owns |
 |---|---|---|
-| **Users & Identity** (`UsersIdentity`) | `users` | External and Internal accounts, profiles, Rules, special needs, user settings, registration, login, OTP, sessions, Google/Apple, Quick Login (UC002-UC008) |
+| **Users & Identity** (`UsersIdentity`) | `users` | External and Internal accounts, Rules, special needs, user settings, registration, login, OTP, sessions, Google/Apple, Quick Login (UC002-UC008) |
 | **Family** | `family` | add dependent, QR link/unlink, family view and rules (UC013-UC017) |
 | **Notifications** | `notifications` | notification centre; email, SMS, push delivery (UC020) |
 | **Platform** | `platform` | system settings, country calling codes (formerly Settings) |
@@ -107,11 +106,12 @@ dotnet build Ilmi.sln
 dotnet test Ilmi.sln
 ```
 
-Nothing else is required to run yet: no database, no configuration, no secrets.
+The tests need SQL Server LocalDB (`(localdb)\MSSQLLocalDB`, or set `ILMI_TEST_SQLSERVER`); they create and drop their own database and apply the real migration.
+To run the API set `ConnectionStrings:UsersIdentity` (user-secrets or environment variable) and apply the migration yourself; see [the module README](src/Modules/UsersIdentity/README.md).
 
 ## Next steps
 
-1. Approve the decisions listed in [docs/database/database-design.md](docs/database/database-design.md) section 10 and answer the open questions.
-2. Then implement module by module: **Platform → Users & Identity → Notifications → Family → Cms → Support**, domain first, then application, infrastructure, presentation.
+1. Approve the decisions and answer the open questions in [docs/database/database-design.md](docs/database/database-design.md) section 10.
+2. Next modules: **Notifications** (email delivery for OTP and passwords), **Platform** (settings, country catalogue), then Family, Cms, Support, domain first, then application, infrastructure, presentation.
 3. Cross-cutting items to design before the first endpoint: response envelope and error handling, authentication/JWT, the scheduled-job approach, logging with PII masking,
    and load testing for the SRS performance targets (NFR001-NFR003).
